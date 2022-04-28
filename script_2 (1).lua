@@ -1,7 +1,7 @@
 script_name('AdminTools')
 script_author('Tobbi_Marchi & Jesse_Flores')
 script_description('Многофункциональный помощник для администрации проекта PayDay RP.')
-script_version('0.0.1')
+script_version('1.13.1')
 
 require 'moonloader'
 local sampev = require 'lib.samp.events'
@@ -28,6 +28,47 @@ local ini = inicfg.load(inicfg.load({
         admlvl = 1,
         sms_admin = '',
         combo_org = 0
+    },
+    stats = {
+        stats_show = true,
+        stats_time = true,
+        stats_data = true,
+        clock = true,
+        sesOnline = true,
+        sesAfk = true, 
+        sesFull = true,
+        dayOnline = true,
+        dayAfk = true,
+        dayFull = true,
+        weekOnline = true,
+        weekAfk = true,
+        weekFull = true,
+        server = nil
+    },
+    stats_onDay = {
+        today = os.date("%a"),
+        online = 0,
+        afk = 0,
+        full = 0
+    },
+    stats_onWeek = {
+        week = 1,
+        online = 0,
+        afk = 0,
+        full = 0
+    },
+    stats_myWeekOnline = {
+        [0] = 0,
+        [1] = 0,
+        [2] = 0,
+        [3] = 0,
+        [4] = 0,
+        [5] = 0,
+        [6] = 0
+    },
+    stats_pos =  {
+        x = 0,
+        y = 0
     },
     cheats = {
         wallhack = false,
@@ -73,14 +114,24 @@ local true_false = {
 local window = imgui.ImBool(false)
 local teleportmenu = imgui.ImBool(false)
 local templeader = imgui.ImBool(false)
-
+-- Основные настройки
 local admintag = imgui.ImBuffer(tostring(ini.main.admtag),256)
 local skin = imgui.ImInt(ini.main.skin)
 local admpass = imgui.ImBuffer(tostring(ini.main.admpassword), 32768)
 local adm_lvl = imgui.ImInt(ini.main.admlvl)
 local message_admin = imgui.ImBuffer(u8(ini.main.sms_admin), 256)
 local combo_org = imgui.ImInt(ini.main.combo_org)
-
+-- Статистика
+local stats_show = imgui.ImBool(ini.stats.stats_show)
+local recon = false
+local posX, posY = ini.stats_pos.x, ini.stats_pos.y
+local sesOnline = imgui.ImInt(0)
+local sesAfk = imgui.ImInt(0)
+local sesFull = imgui.ImInt(0)
+local dayFull = imgui.ImInt(ini.stats_onDay.full)
+local weekFull = imgui.ImInt(ini.stats_onWeek.full)
+local nowTime = os.date("%H:%M:%S", os.time())
+-- Вспомогательное ПО
 local cWallHack = imgui.ImBool(ini.cheats.wallhack)
 local clickwarp = imgui.ImBool(ini.cheats.clickwarp)
 local inf_ammo = imgui.ImBool(ini.cheats.inf_ammo)
@@ -142,6 +193,8 @@ function main()
 
     while true do
         wait(0)
+
+        time()
 
         if clickwarp.v then
             while isPauseMenuActive() and not window.v and not teleportmenu.v and not templeader.v do
@@ -206,6 +259,24 @@ function imgui.OnDrawFrame()
         imgui.Process = false
     end
 
+    if stats_show.v and not recon then
+        imgui.SetNextWindowPos(imgui.ImVec2(posX, posY), imgui.Cond.Always)
+        imgui.Begin(u8'#ShowStats', _, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoMove + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.AlwaysAutoResize + imgui.WindowFlags.NoTitleBar)
+            if ini.stats.sesFull then imgui.Text(u8'Текущая сессия: ' .. get_clock(sesFull.v)) end
+            if ini.stats.dayFull then imgui.Text(u8'Онлайн за день: '.. get_clock(ini.stats_onDay.full)) end
+            if ini.stats.dayAfk then imgui.Text(u8'АФК за день: '.. get_clock(ini.stats_onDay.afk)) end
+            if ini.stats.dayOnline then imgui.Text(u8'Чистый онлайн за день: '.. get_clock(ini.stats_onDay.online)) end
+            
+            if ini.stats.weekFull then imgui.Text(u8'Онлайн за неделю: '.. get_clock(ini.stats_onWeek.full)) end
+            if ini.stats.weekAfk then imgui.Text(u8'АФК за неделю: '.. get_clock(ini.stats_onWeek.afk)) end
+            if ini.stats.weekOnline then imgui.Text(u8'Чистый онлайн за неделю: '.. get_clock(ini.stats_onWeek.online)) end
+            if ini.stats.show_data then 
+                imgui.Text(u8'Текущая дата: ' .. os.date("%d.%m.%Y"))
+                imgui.Text(u8'Текущее время: ' .. os.date("%X", os.time())) 
+            end
+        imgui.End()
+    end
+
     if window.v then
         local myname = sampGetPlayerNickname(select(2, sampGetPlayerIdByCharHandle(PLAYER_PED)))
         local _, id = sampGetPlayerIdByCharHandle(PLAYER_PED)
@@ -229,7 +300,7 @@ function imgui.OnDrawFrame()
             if imgui.Button(fa.ICON_FA_CHART_LINE .. u8' Статистика', imgui.ImVec2(148, 25)) then -- Создаем проверку на нажатие кнопки
                 tab = 1 -- Если кнопка была нажата, то переменной tab передаем 0
             end
-            if imgui.Button(u8' Стилизация ' .. fa.ICON_FA_USER_COG, imgui.ImVec2(148, 25)) then -- Создаем проверку на нажатие кнопки
+            if imgui.Button(fa.ICON_FA_PALETTE .. u8' Стилизация ', imgui.ImVec2(148, 25)) then -- Создаем проверку на нажатие кнопки
                 tab = 2 -- Если кнопка была нажата, то переменной tab передаем 0
             end
             if imgui.Button(u8' Вспомогательное ПО', imgui.ImVec2(148, 25)) then
@@ -238,19 +309,19 @@ function imgui.OnDrawFrame()
             if imgui.Button(fa.ICON_FA_KEYBOARD .. u8' Горячие клавиши', imgui.ImVec2(148, 25)) then
                 tab = 4 -- Если кнопка была нажата, то переменной tab передаем 1
             end
-            if imgui.Button(fa.ICON_FA_TOGGLE_ON .. u8' Биндер', imgui.ImVec2(148, 25)) then
+            if imgui.Button(fa.ICON_FA_STICKY_NOTE .. u8' Биндер', imgui.ImVec2(148, 25)) then
                 tab = 5 -- Если кнопка была нажата, то переменной tab передаем 1
             end
             if imgui.Button(fa.ICON_FA_BULLHORN .. u8' Репорт', imgui.ImVec2(148, 25)) then
                 tab = 6 -- Если кнопка была нажата, то переменной tab передаем 1
             end
-            if imgui.Button(u8' Формы', imgui.ImVec2(148, 25)) then
+            if imgui.Button(fa.ICON_FA_HANDSHAKE .. u8' Формы', imgui.ImVec2(148, 25)) then
                 tab = 7 -- Если кнопка была нажата, то переменной tab передаем 1
             end
             if imgui.Button(u8' Чекеры', imgui.ImVec2(148, 25)) then
                 tab = 8 -- Если кнопка была нажата, то переменной tab передаем 1
             end
-            if imgui.Button(u8' Слежка', imgui.ImVec2(148, 25)) then
+            if imgui.Button(fa.ICON_FA_HOURGLASS_START .. u8' Слежка', imgui.ImVec2(148, 25)) then
                 tab = 9 -- Если кнопка была нажата, то переменной tab передаем 1
             end
             if imgui.Button(fa.ICON_FA_EXCLAMATION_TRIANGLE .. u8' Варнинги', imgui.ImVec2(148, 25)) then
@@ -279,19 +350,54 @@ function imgui.OnDrawFrame()
                 imgui.SetCursorPosX(500)
                 imgui.PushItemWidth(120.00)
                 if imgui.InputText(u8'Сообщения в /a после входа ' .. fa.ICON_FA_COMMENT, message_admin) then save() end
+                imgui.Hint(u8'Нажмите на иконку, чтобы включить/выключить отправку сообщения в /a после авторизации как администратор')
                 imgui.PushItemWidth(120.00)
                 if imgui.InputText(u8'Админ пароль ' .. fa.ICON_FA_KEY, admpass, imgui.InputTextFlags.Password) then save() end
-                imgui.Hint(u8'Укажите ваш пароль от /alogin')
+                imgui.Hint(u8'Нажмите на иконку, чтобы включить/выключить автоматическую авторизацию в /alogin')
 				imgui.SameLine()
 				imgui.SetCursorPosX(500)
                 imgui.PushItemWidth(120.00)
 				if imgui.Combo(u8'Организация после входа ' .. fa.ICON_FA_BRIEFCASE, combo_org, organization) then save() end
+                imgui.Hint(u8'Нажмите на иконку, чтобы включить/выключить вступление в организацию после авторизации как администратор')
                 imgui.Separator()
             imgui.EndChild()
         elseif tab == 1 then -- Если tab равен 1, то рисуем BeginChild
             imgui.BeginChild('tabs2', imgui.ImVec2(820,620), true, imgui.WindowFlags.NoScrollbar, true)
 
-                imgui.Text(u8'Статистика | В разработке ...')
+                imgui.BeginChild('StatsMainSetting', imgui.ImVec2(805, 100), true, imgui.WindowFlags.NoScrollbar)
+                    imgui.CenterText(u8'Общая конфигурация')
+                    imgui.Separator()
+
+                    if imgui.Button(fa.ICON_FA_CHECK_CIRCLE .. u8' Отображение', imgui.ImVec2(148, 25)) then
+                        stats_show.v = not stats_show.v
+                    end
+                    imgui.SameLine()
+                    if imgui.Button(fa.ICON_FA_ARROWS_ALT .. u8' Местоположение', imgui.ImVec2(148, 25)) then
+                        
+                    end
+                    imgui.SameLine()
+                    if imgui.Button(fa.ICON_FA_CHECK_CIRCLE .. u8' Сесия: Отображается', imgui.ImVec2(148, 25)) then
+                        ini.stats.sesFull = not ini.stats.sesFull
+                    end
+                    imgui.SameLine()
+                    if imgui.Button(fa.ICON_FA_TIMES_CIRCLE .. u8' Дата: Отображается', imgui.ImVec2(148, 25)) then
+                        ini.stats.show_data = not ini.stats.show_data
+                    end
+
+                imgui.EndChild()
+
+                imgui.BeginChild('TodayStats', imgui.ImVec2(399, 490), true, imgui.WindowFlags.NoScrollbar)
+                    imgui.CenterText(u8'Дневная статистика')
+                    imgui.Separator()
+
+                imgui.EndChild()
+                imgui.SameLine()
+                imgui.BeginChild('WeeklyStats', imgui.ImVec2(399, 490), true, imgui.WindowFlags.NoScrollbar)
+                    imgui.CenterText(u8'Недельная статистика')
+                    imgui.Separator()
+
+                imgui.EndChild()
+                imgui.SameLine()
 
             imgui.EndChild() -- Закрываем Child
         elseif tab == 2 then -- Если tab равен 1, то рисуем BeginChild
@@ -1130,7 +1236,7 @@ function autoupdate()
     local dlstatus = require('moonloader').download_status
     local json = getWorkingDirectory() .. '\\'..thisScript().name..'-version.json'
     if doesFileExist(json) then os.remove(json) end
-    downloadUrlToFile("https://raw.githubusercontent.com/its16bit/AdminTools/main/version.json", json,
+    downloadUrlToFile("https://raw.githubusercontent.com/NeRenni/Admin-Tools/main/version.json", json,
         function(id, status, p1, p2)
             if status == dlstatus.STATUSEX_ENDDOWNLOAD then
             if doesFileExist(json) then
@@ -1186,4 +1292,42 @@ function sendChatMessage(string)
     sampAddChatMessage(string.format("[AdminTools] {FFFFFF}%s", string), 0x4EE44E)
 end
 
-god_theme()
+function sampev.onTogglePlayerSpectating(state) recon = state end 
+
+function time()
+    startTime = os.time()                                               -- "Точка отсчёта"
+    connectingTime = 0
+    while true do
+        wait(1000)
+        nowTime = os.date("%H:%M:%S", os.time())
+        if sampGetGamestate() == 3 then                                 -- Игровой статус равен "Подключён к серверу" (Что бы онлайн считало только, когда, мы подключены к серверу)
+            sesOnline.v = sesOnline.v + 1                               -- Онлайн за сессию без учёта АФК
+            sesFull.v = os.time() - startTime                           -- Общий онлайн за сессию
+            sesAfk.v = sesFull.v - sesOnline.v                          -- АФК за сессию
+
+            ini.stats_onDay.online = ini.stats_onDay.online + 1                     -- Онлайн за день без учёта АФК
+            ini.stats_onDay.full = dayFull.v + sesFull.v                      -- Общий онлайн за день
+            ini.stats_onDay.afk = ini.stats_onDay.full - ini.stats_onDay.online           -- АФК за день
+
+            ini.stats_onWeek.online = ini.stats_onWeek.online + 1                   -- Онлайн за неделю без учёта АФК
+            ini.stats_onWeek.full = weekFull.v + sesFull.v                    -- Общий онлайн за неделю
+            ini.stats_onWeek.afk = ini.stats_onWeek.full - ini.stats_onWeek.online        -- АФК за неделю
+
+            local today = tonumber(os.date('%w', os.time()))
+            ini.stats_myWeekOnline[today] = ini.stats_onDay.full
+
+            connectingTime = 0
+        else
+            connectingTime = connectingTime + 1                         -- Вермя подключения к серверу
+            startTime = startTime + 1                                   -- Смещение начала отсчета таймеров
+        end
+    end
+end
+
+function get_clock(time)
+    local timezone_offset = 86400 - os.date('%H', 0) * 3600
+    if tonumber(time) >= 86400 then onDay = true else onDay = false end
+    return os.date((onDay and math.floor(time / 86400)..'д ' or '')..'%H:%M:%S', time + timezone_offset)
+end
+
+red_theme()
